@@ -30,6 +30,7 @@ interface Tui {
 
 interface Theme {
   fg(color: string, text: string): string;
+  icon: Readonly<Record<string, unknown>>;
 }
 
 interface Widget {
@@ -169,11 +170,31 @@ function formatGitState(state: GitState | undefined, branchMaximumLength: number
   return `${abbreviate(state.branch ?? "detached", branchMaximumLength)} +${state.staged} ~${state.unstaged} ?${state.untracked}`;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
+}
+
+function isFunction(value: unknown): value is (...args: unknown[]) => unknown {
+  return typeof value === "function";
+}
+
+function themeIcon(theme: Theme, name: string, fallback: string): string {
+  const icon = theme.icon[name];
+  return typeof icon === "string" && icon ? icon : fallback;
+}
+
 function resolveTheme(value: unknown): Theme {
-  if (value !== null && typeof value === "object" && "fg" in value && typeof value.fg === "function") {
-    return { fg: value.fg.bind(value) };
+  if (isRecord(value) && isFunction(value.fg)) {
+    const icons = isRecord(value.icon) ? value.icon : {};
+    return {
+      fg: (color, text) => {
+        const rendered = value.fg.call(value, color, text);
+        return typeof rendered === "string" ? rendered : text;
+      },
+      icon: icons,
+    };
   }
-  return { fg: (_color, text) => text };
+  return { fg: (_color, text) => text, icon: {} };
 }
 
 class FullStatusWidget implements Widget {
@@ -184,6 +205,41 @@ class FullStatusWidget implements Widget {
     private readonly gitState: () => GitState | undefined,
     private readonly theme: Theme,
   ) {}
+
+  private styleSegment(segment: string): string {
+    const separatorIndex = segment.indexOf(":");
+    if (separatorIndex < 0) return segment;
+
+    const label = segment.slice(0, separatorIndex);
+    const gitState = this.gitState();
+    const contextPercent = this.context.getContextUsage()?.percent;
+    const contextColor = contextPercent != null && contextPercent >= 80
+      ? "error"
+      : contextPercent != null && contextPercent >= 50
+        ? "warning"
+        : "statusLineContext";
+    const gitDirty = gitState !== undefined && (gitState.staged > 0 || gitState.unstaged > 0 || gitState.untracked > 0);
+    const styles: Record<string, { color: string; icon: string; fallback: string }> = {
+      Pi: { color: "accent", icon: "pi", fallback: "π" },
+      Host: { color: "dim", icon: "host", fallback: "⌂" },
+      Model: { color: "statusLineModel", icon: "model", fallback: "◆" },
+      WS: { color: "statusLinePath", icon: "folder", fallback: "▣" },
+      Git: { color: gitDirty ? "statusLineGitDirty" : "statusLineGitClean", icon: "branch", fallback: "⎇" },
+      Session: { color: "accent", icon: "session", fallback: "◌" },
+      Context: { color: contextColor, icon: "context", fallback: "◐" },
+      Cache: { color: "statusLineSpend", icon: "cache", fallback: "◫" },
+      In: { color: "statusLineSpend", icon: "input", fallback: "←" },
+      Out: { color: "statusLineOutput", icon: "output", fallback: "→" },
+      Read: { color: "statusLineSpend", icon: "cache", fallback: "◫" },
+      Rate: { color: "statusLineOutput", icon: "throughput", fallback: "↯" },
+      Cost: { color: "statusLineCost", icon: "cost", fallback: "$" },
+      Time: { color: "dim", icon: "time", fallback: "◷" },
+      Clock: { color: "dim", icon: "time", fallback: "◷" },
+    };
+    const style = styles[label];
+    if (!style) return segment;
+    return this.theme.fg(style.color, `${themeIcon(this.theme, style.icon, style.fallback)} ${segment}`);
+  }
 
   render(width: number): string[] {
     const contextUsage = this.context.getContextUsage();
@@ -206,15 +262,15 @@ class FullStatusWidget implements Widget {
     const gitText = formatGitState(this.gitState(), valueWidth);
     const sessionText = abbreviate(sessionName, valueWidth);
     const rawLines = [
-      `Pi:omp | Host:${hostText} | Model:${modelText} | Think:${thinkingText}`,
+      `Pi:omp | Host:${hostText} | Model:${modelText} · ${thinkingText}`,
       `WS:${workspaceText} | Git:${gitText}`,
       `Session:${sessionText} | Context:${contextText} | Cache:${cacheHit}`,
-      `Tokens:in ${formatCount(usage.input)} out ${formatCount(usage.output)} read ${formatCount(usage.cacheRead)} avg ${formatCount(Math.round((usage.input + usage.output + usage.cacheRead) / elapsedSeconds))}/s`,
+      `In:${formatCount(usage.input)} | Out:${formatCount(usage.output)} | Read:${formatCount(usage.cacheRead)} | Rate:${formatCount(Math.round((usage.input + usage.output + usage.cacheRead) / elapsedSeconds))} tok/s`,
       `Cost:${costText} | Time:${formatDuration(elapsedMilliseconds)} | Clock:${new Date().toLocaleTimeString()}`,
     ];
     return rawLines
       .flatMap(line => wrapLine(line, width))
-      .map(line => line.replace(/\b(?:Pi|Host|Model|Think|WS|Git|Session|Context|Cache|Tokens|Cost|Time|Clock):/g, label => this.theme.fg("dim", label)));
+      .map(line => line.split(" | ").map(segment => this.styleSegment(segment)).join(this.theme.fg("dim", " | ")));
   }
 }
 
