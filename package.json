@@ -1,0 +1,10 @@
+{
+  "name": "omp-full-status-widget",
+  "version": "0.1.0",
+  "description": "A compact, OMP-themed five-row status widget for Oh My Pi.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "check": "bun build full-status-widget.ts --target=bun --outdir .check"
+  }
+}
