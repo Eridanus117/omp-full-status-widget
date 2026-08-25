@@ -2,6 +2,14 @@
   "name": "omp-full-status-widget",
   "version": "0.1.0",
   "description": "A compact, OMP-themed five-row status widget for Oh My Pi.",
+  "repository": "https://github.com/Eridanus117/omp-full-status-widget",
+  "author": "Eridanus117",
+  "keywords": [
+    "omp",
+    "oh-my-pi",
+    "status-line",
+    "widget"
+  ],
   "type": "module",
   "license": "MIT",
   "scripts": {
