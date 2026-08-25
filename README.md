@@ -18,11 +18,25 @@ Long paths, branch names, model IDs, and session names are abbreviated from the 
 
 Requires OMP 18.0.0 or later and Bun, which OMP already uses at runtime.
 
+Clone the repository into a directory of your choice, then register the widget by its absolute path: replace the `/path/to` (or `C:/path/to`) placeholder below with the directory you cloned into.
+
+macOS / Linux (sh):
+
 ```sh
-git clone https://github.com/Eridanus117/omp-full-status-widget.git C:/Workspace/omp-full-status-widget
-omp config set extensions '["C:/Workspace/omp-full-status-widget/full-status-widget.ts"]'
+git clone https://github.com/Eridanus117/omp-full-status-widget.git
+omp config set extensions '["/path/to/omp-full-status-widget/full-status-widget.ts"]'
 omp config set statusLine.preset minimal
 ```
+
+Windows (PowerShell):
+
+```powershell
+git clone https://github.com/Eridanus117/omp-full-status-widget.git
+omp config set extensions '[\"C:/path/to/omp-full-status-widget/full-status-widget.ts\"]'
+omp config set statusLine.preset minimal
+```
+
+The backslash-escaped quotes keep the JSON value intact in Windows PowerShell 5.1; on PowerShell 7.3 and later the unescaped sh form also works.
 
 Restart OMP after changing its extension configuration.
 
