@@ -42,15 +42,17 @@ Restart OMP after changing its extension configuration.
 
 If you already use other extensions, include this file in the existing `extensions` array instead of replacing it.
 
-## Design constraints
-
-OMP's public extension API exposes the theme, model, session metadata, context use, message usage, and editor-adjacent widgets. It does not expose the native status-line renderer or its PR/subagent segments. The widget therefore reuses OMP theme typography and mirrors only the public `full`-status data; it never fabricates unavailable values.
-
 ## Verify
+
+From the repository root, run the check script to verify that the widget builds successfully:
 
 ```sh
 bun run check
 ```
+
+## Design constraints
+
+OMP's public extension API exposes the theme, model, session metadata, context use, message usage, and editor-adjacent widgets. It does not expose the native status-line renderer or its PR/subagent segments. The widget therefore reuses OMP theme typography and mirrors only the public `full`-status data; it never fabricates unavailable values.
 
 ## License
 
