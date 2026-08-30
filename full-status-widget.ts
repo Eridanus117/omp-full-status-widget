@@ -82,6 +82,11 @@ function finiteNumber(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function usageCost(value: unknown): number | undefined {
+  if (isRecord(value)) return finiteNumber(value.total);
+  return finiteNumber(value);
+}
+
 function formatDuration(milliseconds: number): string {
   const elapsed = Math.floor(milliseconds / 1_000);
   return `${String(Math.floor(elapsed / 3_600)).padStart(2, "0")}:${String(Math.floor(elapsed / 60) % 60).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
@@ -98,7 +103,7 @@ function addUsage(total: UsageTotal, usage: Usage | undefined): void {
   const output = finiteNumber(usage.output);
   const cacheRead = finiteNumber(usage.cacheRead);
   const cacheWrite = finiteNumber(usage.cacheWrite);
-  const cost = finiteNumber(usage.cost);
+  const cost = usageCost(usage.cost);
   total.input += input ?? 0;
   total.output += output ?? 0;
   total.cacheRead += cacheRead ?? 0;
