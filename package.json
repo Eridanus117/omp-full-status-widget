@@ -11,6 +11,11 @@
     "widget"
   ],
   "type": "module",
+  "omp": {
+    "extensions": [
+      "./full-status-widget.ts"
+    ]
+  },
   "license": "MIT",
   "scripts": {
     "check": "bun build full-status-widget.ts --target=bun --outdir .check"
