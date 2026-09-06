@@ -69,7 +69,8 @@ interface UsageTotal {
   output: number;
   cacheRead: number;
   cacheWrite: number;
-  cost: number | null;
+  // undefined: no cost data; null: invalid cost; number: valid accumulated cost.
+  cost: number | null | undefined;
 }
 
 interface GitState {
@@ -132,11 +133,11 @@ function addUsage(total: UsageTotal, usage: Usage | undefined): void {
   total.cacheRead += cacheRead ?? 0;
   total.cacheWrite += cacheWrite ?? 0;
   if (usage.cost !== undefined && cost === undefined) total.cost = null;
-  else if (cost !== undefined && total.cost !== null) total.cost += cost;
+  else if (cost !== undefined && total.cost !== null) total.cost = (total.cost ?? 0) + cost;
 }
 
 function collectUsage(sessionManager: SessionManager): UsageTotal {
-  const total: UsageTotal = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
+  const total: UsageTotal = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: undefined };
   for (const entry of sessionManager.getEntries()) {
     addUsage(total, entry.message?.usage ?? entry.usage);
   }
@@ -312,7 +313,7 @@ class FullStatusWidget implements Widget {
     const contextText = contextUsage?.percent == null || contextWindow == null
       ? "n/a"
       : `${contextUsage.percent.toFixed(1)}% · ${contextTokens === undefined ? "?" : `${formatCount(contextTokens)}/`}${formatCount(contextWindow)} · ${contextLeft === undefined ? "?" : formatCount(contextLeft)} left`;
-    const costText = usage.cost === null ? "n/a" : `$${usage.cost.toFixed(3)}`;
+    const costText = usage.cost == null ? "n/a" : `$${usage.cost.toFixed(3)}`;
     const valueWidth = Math.max(12, Math.floor(width * 0.35));
     const thinkingText = abbreviate(this.thinkingLevel() ?? "default", 12);
     const modelText = abbreviate(model, Math.max(12, width - thinkingText.length - 30));
