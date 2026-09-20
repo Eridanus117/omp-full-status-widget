@@ -98,7 +98,29 @@ Cost:$0.184 | Time:00:42:18 | Clock:14:32:08
 
 Requires OMP 18.0.0 or later and Bun, which OMP already uses at runtime.
 
-Clone the repository into a directory of your choice, then register the widget by its absolute path: replace the `/path/to` (or `C:/path/to`) placeholder below with the directory you cloned into.
+### Marketplace (recommended)
+
+Register the bundled marketplace catalog and install the widget:
+
+```sh
+omp plugin marketplace add Eridanus117/omp-full-status-widget
+omp plugin discover omp-full-status
+omp plugin install omp-full-status-widget@omp-full-status
+omp config set statusLine.preset minimal
+```
+
+Update the marketplace catalog and installed plugin later with:
+
+```sh
+omp plugin marketplace update
+omp plugin upgrade
+```
+
+If you previously configured the widget through `extensions`, remove its absolute-path entry after the marketplace install. Do not load the same widget through both mechanisms.
+
+### Manual or local development install
+
+Clone the repository into a directory of your choice, then register the widget by its absolute path. This path is useful for local development or as a fallback when marketplace installation is unavailable.
 
 macOS / Linux (sh):
 

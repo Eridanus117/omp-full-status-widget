@@ -1,0 +1,15 @@
+{
+  "name": "omp-full-status",
+  "owner": {
+    "name": "Eridanus117"
+  },
+  "plugins": [
+    {
+      "name": "omp-full-status-widget",
+      "source": {
+        "source": "github",
+        "repo": "Eridanus117/omp-full-status-widget"
+      }
+    }
+  ]
+}
