@@ -97,6 +97,7 @@ Cost:$0.184 | Time:00:42:18 | Clock:14:32:08
 ## Install
 
 Requires OMP 18.0.0 or later and Bun, which OMP already uses at runtime.
+Bootstrap uses client-config to set statusLine.preset; the manual install commands below explicitly set the target value nerd.
 
 ### Marketplace (recommended)
 
