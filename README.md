@@ -106,7 +106,7 @@ Register the bundled marketplace catalog and install the widget:
 omp plugin marketplace add Eridanus117/omp-full-status-widget
 omp plugin discover omp-full-status
 omp plugin install omp-full-status-widget@omp-full-status
-omp config set statusLine.preset minimal
+omp config set statusLine.preset nerd
 ```
 
 Update the marketplace catalog and installed plugin later with:
@@ -127,7 +127,7 @@ macOS / Linux (sh):
 ```sh
 git clone https://github.com/Eridanus117/omp-full-status-widget.git
 omp config set extensions '["/path/to/omp-full-status-widget/full-status-widget.ts"]'
-omp config set statusLine.preset minimal
+omp config set statusLine.preset nerd
 ```
 
 Windows (PowerShell):
@@ -135,7 +135,7 @@ Windows (PowerShell):
 ```powershell
 git clone https://github.com/Eridanus117/omp-full-status-widget.git
 omp config set extensions '[\"C:/path/to/omp-full-status-widget/full-status-widget.ts\"]'
-omp config set statusLine.preset minimal
+omp config set statusLine.preset nerd
 ```
 
 The backslash-escaped quotes keep the JSON value intact in Windows PowerShell 5.1; on PowerShell 7.3 and later the unescaped sh form also works.
