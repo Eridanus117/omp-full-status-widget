@@ -98,7 +98,7 @@ Cost:$0.184 | Time:00:42:18 | Clock:14:32:08
 
 ## 安装
 
-需要 OMP 18.0.0 或更新版本，以及 Bun（OMP 运行时已使用 Bun）。在 bootstrap 部署中，statusLine.preset 由 client-config 管理；手动安装命令显式设为 nerd。
+需要 OMP 18.0.0 或更新版本，以及 Bun 1.3.7 或更新版本（使用其 ANSI／Unicode 显示宽度工具）。在 bootstrap 部署中，statusLine.preset 由 client-config 管理；手动安装命令显式设为 nerd。
 
 ### Marketplace（推荐）
 
@@ -148,9 +148,10 @@ omp config set statusLine.preset nerd
 
 ## 验证
 
-在仓库根目录运行以下命令，确认 widget 能成功构建：
+在仓库根目录运行以下命令，验证带主题图标、颜色、中文和 emoji 的显示宽度，并确认 widget 能成功构建：
 
 ~~~sh
+bun test
 bun run check
 ~~~
 

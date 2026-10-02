@@ -4,7 +4,7 @@ A six-row status widget extension for [Oh My Pi](https://github.com/can1357/oh-m
 
 - The whole extension is a single file, `full-status-widget.ts`, registered through the `omp.extensions` field in `package.json`.
 - `README.md` documents every displayed field and the install steps; keep it in sync when fields change.
-- Verify with `bun run check` (builds into the ignored `.check/` directory). There is no test suite.
+- Verify with `bun test` (terminal-width regression tests) and `bun run check` (builds into the ignored `.check/` directory).
 
 ## Agent skills
 

@@ -116,9 +116,20 @@ function formatDuration(milliseconds: number): string {
   return `${String(Math.floor(elapsed / 3_600)).padStart(2, "0")}:${String(Math.floor(elapsed / 60) % 60).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
 }
 
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
 function abbreviate(value: string, maximumLength: number): string {
-  if (value.length <= maximumLength) return value;
-  return `…${value.slice(1 - maximumLength)}`;
+  if (Bun.stringWidth(value) <= maximumLength) return value;
+  const parts = Array.from(graphemes.segment(value), part => part.segment);
+  let suffix = "";
+  let columns = 1; // Reserve the ellipsis column.
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const partWidth = Bun.stringWidth(parts[i]);
+    if (columns + partWidth > maximumLength) break;
+    suffix = parts[i] + suffix;
+    columns += partWidth;
+  }
+  return `…${suffix}`;
 }
 
 function addUsage(total: UsageTotal, usage: Usage | undefined): void {
@@ -145,19 +156,7 @@ function collectUsage(sessionManager: SessionManager): UsageTotal {
 }
 
 function wrapLine(line: string, width: number): string[] {
-  const maximumWidth = Math.max(1, width);
-  if (line.length <= maximumWidth) return [line];
-
-  const wrapped: string[] = [];
-  let remaining = line;
-  while (remaining.length > maximumWidth) {
-    const splitAt = remaining.lastIndexOf(" ", maximumWidth);
-    const boundary = splitAt > 0 ? splitAt : maximumWidth;
-    wrapped.push(remaining.slice(0, boundary));
-    remaining = remaining.slice(boundary).trimStart();
-  }
-  if (remaining.length > 0) wrapped.push(remaining);
-  return wrapped;
+  return Bun.wrapAnsi(line, Math.max(1, width), { hard: true }).split("\n");
 }
 
 function unrefTimer(timer: unknown): void {
@@ -241,7 +240,7 @@ function resolveTheme(value: unknown): Theme {
   return { fg: (_color, text) => text, icon: {} };
 }
 
-class FullStatusWidget implements Widget {
+export class FullStatusWidget implements Widget {
   constructor(
     private readonly context: ExtensionContext,
     private readonly thinkingLevel: () => string | undefined,
@@ -343,8 +342,8 @@ class FullStatusWidget implements Widget {
       `Cost:${costText} | Time:${formatDuration(elapsedMilliseconds)} | Clock:${new Date().toLocaleTimeString()}`,
     ];
     return rawLines
-      .flatMap(line => wrapLine(line, width))
-      .map(line => line.split(" | ").map(segment => this.styleSegment(segment)).join(this.theme.fg("dim", " | ")));
+      .map(line => line.split(" | ").map(segment => this.styleSegment(segment)).join(this.theme.fg("dim", " | ")))
+      .flatMap(line => wrapLine(line, width));
   }
 }
 export default function registerFullStatusWidget(pi: MinimalPi): void {
