@@ -116,9 +116,20 @@ function formatDuration(milliseconds: number): string {
   return `${String(Math.floor(elapsed / 3_600)).padStart(2, "0")}:${String(Math.floor(elapsed / 60) % 60).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
 }
 
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
 function abbreviate(value: string, maximumLength: number): string {
   if (Bun.stringWidth(value) <= maximumLength) return value;
-  return `…${Bun.sliceAnsi(value, 1 - maximumLength)}`;
+  const parts = Array.from(graphemes.segment(value), part => part.segment);
+  let suffix = "";
+  let columns = 1; // Reserve the ellipsis column.
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const partWidth = Bun.stringWidth(parts[i]);
+    if (columns + partWidth > maximumLength) break;
+    suffix = parts[i] + suffix;
+    columns += partWidth;
+  }
+  return `…${suffix}`;
 }
 
 function addUsage(total: UsageTotal, usage: Usage | undefined): void {
