@@ -18,6 +18,7 @@
   },
   "license": "MIT",
   "scripts": {
+    "test": "bun test",
     "check": "bun build full-status-widget.ts --target=bun --outdir .check"
   }
 }
