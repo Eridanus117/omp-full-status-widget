@@ -18,4 +18,4 @@ Issues 在本仓 GitHub Issues（`Eridanus117/omp-full-status-widget`）里，`g
 
 ### Domain docs
 
-Single-context：根 `CONTEXT.md` + `docs/adr/`（按需生成）。See `docs/agents/domain.md`.
+术语表在根 `GLOSSARY.md`（2026-10-07 建，issue #14；一词一条，新词先查它）；`docs/adr/` 按需生成。See `docs/agents/domain.md`.
