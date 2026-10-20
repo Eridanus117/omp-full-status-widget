@@ -1,4 +1,4 @@
-// OMP full-status-widget: a compact five-row status widget above the editor.
+// OMP full-status-widget: a compact six-row status widget above the editor.
 
 interface ContextUsage {
   tokens?: number | null;
