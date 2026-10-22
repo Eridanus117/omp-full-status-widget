@@ -72,7 +72,7 @@ OMP 公开扩展 API 能读到的值：主题、模型、会话元数据、上�
 ## 行、字段与区段（row / field / segment）
 
 行：组件的六行之一。字段：一行里的一个标签加值，如 Model、Cache。区段：OMP 原生状态行里的一块，如 PR、子 Agent 区段；组件没有区段这一层。
-名称说明：代码里的 segment 指字段的样式单元，与 OMP 的区段不是一回事；package.json 描述里的“five-row”是过时文字。
+名称说明：代码里的 segment 指字段的样式单元，与 OMP 的区段不是一回事。
 
 ## 缓存命中率（cache hit rate）
 
