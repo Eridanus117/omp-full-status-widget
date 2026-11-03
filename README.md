@@ -11,7 +11,9 @@
 3. 会话名称、回合/条目数和上下文用量
 4. 缓存命中率、输入/输出/缓存令牌和平均速率
 5. 当前工具、异步任务、活动工具数和待处理消息
-6. 成本、会话耗时和时钟
+6. 成本、会话耗时、时钟，以及 OMP 报告了才出现的 plan/goal/vibe/loop 模式与子 Agent 名称
+
+`Mode` 只在 OMP 的 `plan`/`goal`/`vibe`/`loop` 模式处于 active 或 paused 时出现（`loop:paused` 这样标注）；`Agent` 只在子 Agent 会话里出现，主会话不显示。两者都靠宿主提供，拿不到时整段省略，不占位。
 
 组件有意省略 Pi 与宿主标识。长路径、分支名、模型 ID、会话名和工具名会按需从左侧缩短。组件运行时定期刷新 Git 状态。终端宽度为 80 列时，正常布局可能换行；组件优先保留运行数据，不丢弃字段。
 
@@ -25,7 +27,7 @@ WS:C:/Workspace/project | Git:main ↑2 ↓1 +2 ~1 ?0
 Session:fix-auth | Turns:3 | Entries:18 | Context:42.0% · 84.0k/200.0k · 116.0k left
 Cache:94.2% | In:12.4k | Out:3.2k | Read:80k | Write:4.1k | Rate:1.8k tok/s
 Tool:bash · 00:00:04 | Jobs:2 running · 1 recent · 1 queued | Tools:14 | Pending:no
-Cost:$0.184 | Time:00:42:18 | Clock:14:32:08
+Cost:$0.184 | Time:00:42:18 | Clock:14:32:08 | Mode:plan | Agent:explore
 ~~~
 
 ### 第一行：模型和运行状态

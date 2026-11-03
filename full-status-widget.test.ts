@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { FullStatusWidget } from "./full-status-widget.ts";
+import { FullStatusWidget, formatModes } from "./full-status-widget.ts";
 
 function widget(sessionName = "synthetic-session", cwd = "C:/synthetic-project", icon = "◆") {
   return new FullStatusWidget(
@@ -48,5 +48,30 @@ describe("terminal display width", () => {
     const plain = Bun.stripANSI(lines.join("\n"));
     expect(plain.isWellFormed()).toBe(true);
     expect(plain).not.toMatch(/(?:…|\n)[\u0301\u200d]/u);
+  });
+});
+
+describe("mode and agent segments", () => {
+  test("formats active and paused modes, and stays empty when inactive", () => {
+    expect(formatModes({ plan: "active", goal: "inactive", vibe: "inactive", loop: "paused" })).toBe("plan+loop:paused");
+    expect(formatModes({ plan: "inactive", goal: "inactive", vibe: "inactive", loop: "inactive" })).toBe("");
+    expect(formatModes(undefined)).toBe("");
+    expect(formatModes({ plan: "active" })).toBe("plan");
+  });
+
+  test("renders Mode and Agent only when the host reports them", () => {
+    const withModes = widget().render(120).map(Bun.stripANSI).join("\n");
+    expect(withModes).not.toContain("Mode:");
+    expect(withModes).not.toContain("Agent:");
+  });
+
+  test("shows the subagent name and active modes when present", () => {
+    const base = widget();
+    const context = (base as unknown as { context: Record<string, unknown> }).context;
+    context.sessionModes = { getState: () => ({ plan: "active", goal: "inactive", vibe: "inactive", loop: "inactive" }) };
+    context.agent = { kind: "sub", name: "explore" };
+    const text = base.render(160).map(Bun.stripANSI).join("\n");
+    expect(text).toContain("Mode:plan");
+    expect(text).toContain("Agent:explore");
   });
 });

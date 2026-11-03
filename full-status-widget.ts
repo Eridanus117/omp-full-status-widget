@@ -50,6 +50,10 @@ interface ExtensionContext {
   sessionManager: SessionManager;
   getContextUsage(): ContextUsage | undefined;
   getAsyncJobSnapshot?(): AsyncJobSnapshot | null;
+  /** OMP: plan / goal / vibe / loop mode state. Absent on hosts without modes. */
+  sessionModes?: { getState(): unknown };
+  /** OMP: the agent this session runs; `kind` is "main" or "sub". */
+  agent?: { kind?: string; name?: string };
   isIdle(): boolean;
   hasPendingMessages?(): boolean;
   ui: {
@@ -204,6 +208,18 @@ function formatGitState(state: GitState | undefined, branchMaximumLength: number
   return `${abbreviate(state.branch ?? "detached", branchMaximumLength)}${sync} +${state.staged} ~${state.unstaged} ?${state.untracked}`;
 }
 
+/** Active/paused plan, goal, vibe, loop modes as `plan+goal`; empty when inactive. */
+export function formatModes(state: unknown): string {
+  if (!isRecord(state)) return "";
+  const labels: string[] = [];
+  for (const mode of ["plan", "goal", "vibe", "loop"]) {
+    const value = state[mode];
+    if (value === "active") labels.push(mode);
+    else if (value === "paused") labels.push(`${mode}:paused`);
+  }
+  return labels.join("+");
+}
+
 function formatServiceTiers(value: unknown): string {
   if (!isRecord(value)) return "n/a";
   const tiers = Object.entries(value)
@@ -273,6 +289,9 @@ export class FullStatusWidget implements Widget {
       WS: { color: "statusLinePath", icon: "folder", fallback: "▣" },
       Git: { color: gitDirty ? "statusLineGitDirty" : "statusLineGitClean", icon: "branch", fallback: "⎇" },
       Session: { color: "accent", icon: "session", fallback: "◌" },
+      Turns: { color: "dim", icon: "session", fallback: "↻" },
+      Mode: { color: "warning", icon: "status", fallback: "◆" },
+      Agent: { color: "accent", icon: "task", fallback: "⇉" },
       Entries: { color: "dim", icon: "session", fallback: "≡" },
       Context: { color: contextColor, icon: "context", fallback: "◐" },
       Cache: { color: "statusLineSpend", icon: "cache", fallback: "◫" },
@@ -332,6 +351,9 @@ export class FullStatusWidget implements Widget {
       ? `${snapshot.running?.length ?? 0} running · ${snapshot.recent?.length ?? 0} recent${snapshot.delivery?.queued ? ` · ${snapshot.delivery.queued} queued` : ""}`
       : "n/a";
     const pendingText = this.context.hasPendingMessages?.() ? "yes" : "no";
+    const modesText = formatModes(this.context.sessionModes?.getState());
+    const agent = this.context.agent;
+    const agentText = agent?.kind === "sub" ? abbreviate(agent.name || "sub", 16) : "";
     const activeTools = this.activeTools?.();
     const rawLines = [
       `Model:${modelText} | Thinking:${thinkingText} | Tier:${formatServiceTiers(this.serviceTiers())} | State:${stateText}`,
@@ -339,7 +361,7 @@ export class FullStatusWidget implements Widget {
       `Session:${sessionText} | Turns:${runtime.turnIndex} | Entries:${this.context.sessionManager.getEntries().length} | Context:${contextText}`,
       `Cache:${cacheHit} | In:${formatCount(usage.input)} | Out:${formatCount(usage.output)} | Read:${formatCount(usage.cacheRead)} | Write:${formatCount(usage.cacheWrite)} | Rate:${formatCount(Math.round((usage.input + usage.output + usage.cacheRead) / elapsedSeconds))} tok/s`,
       `Tool:${toolText} | Jobs:${jobsText} | Tools:${activeTools?.length ?? "n/a"} | Pending:${pendingText}`,
-      `Cost:${costText} | Time:${formatDuration(elapsedMilliseconds)} | Clock:${new Date().toLocaleTimeString()}`,
+      `Cost:${costText} | Time:${formatDuration(elapsedMilliseconds)} | Clock:${new Date().toLocaleTimeString()}${modesText ? ` | Mode:${modesText}` : ""}${agentText ? ` | Agent:${agentText}` : ""}`,
     ];
     return rawLines
       .map(line => line.split(" | ").map(segment => this.styleSegment(segment)).join(this.theme.fg("dim", " | ")))
@@ -352,6 +374,9 @@ export default function registerFullStatusWidget(pi: MinimalPi): void {
   let renderTimer: ReturnType<typeof setInterval> | undefined;
   let gitRefreshTimer: ReturnType<typeof setInterval> | undefined;
   let gitReadInFlight = false;
+  let lastGitReadAt = 0;
+  const ACTIVE_GIT_INTERVAL_MS = 5_000;
+  const IDLE_GIT_INTERVAL_MS = 20_000;
   let runtimeState: RuntimeState = { status: "idle", statusSince: Date.now(), turnIndex: 0 };
 
   function requestRender(): void {
@@ -370,9 +395,14 @@ export default function registerFullStatusWidget(pi: MinimalPi): void {
 
   async function refreshGit(cwd: string): Promise<void> {
     if (gitReadInFlight) return;
+    // `git status` costs 30-60ms on a large repo; while nothing is running there
+    // is no reason to pay that every 5s.
+    const interval = runtimeState.status === "idle" ? IDLE_GIT_INTERVAL_MS : ACTIVE_GIT_INTERVAL_MS;
+    if (Date.now() - lastGitReadAt < interval) return;
     gitReadInFlight = true;
     try {
       gitState = await readGitState(cwd);
+      lastGitReadAt = Date.now();
     } finally {
       gitReadInFlight = false;
       requestRender();
@@ -382,6 +412,7 @@ export default function registerFullStatusWidget(pi: MinimalPi): void {
   async function install(_event: unknown, context: ExtensionContext): Promise<void> {
     if (context.mode !== "tui") return;
     const startedAt = Date.now();
+    lastGitReadAt = 0;
     runtimeState = { status: "idle", statusSince: startedAt, turnIndex: 0 };
     context.ui.setWidget("full-status", (nextTui, theme) => {
       tui = nextTui;
@@ -483,4 +514,11 @@ export default function registerFullStatusWidget(pi: MinimalPi): void {
   pi.on("auto_retry_start", onRetryStart);
   pi.on("auto_retry_end", onRetryEnd);
   pi.on("message_end", refresh);
+  pi.on("session_shutdown", () => {
+    clearInterval(renderTimer);
+    clearInterval(gitRefreshTimer);
+    renderTimer = undefined;
+    gitRefreshTimer = undefined;
+    tui = undefined;
+  });
 }
