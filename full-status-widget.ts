@@ -209,6 +209,21 @@ export function packSegments(segments: readonly Segment[], width: number): Segme
     }
   }
   if (row.length > 0) rows.push(row);
+  // Avoid a one-field orphan row: when the tail holds a single segment and the
+  // row above it has room, move the last segment down.
+  if (rows.length > 1) {
+    const last = rows[rows.length - 1];
+    const previous = rows[rows.length - 2];
+    if (last.length === 1 && previous.length >= 3) {
+      const moved = previous[previous.length - 1];
+      const candidate = [moved, ...last];
+      const width = candidate.reduce((sum, item, index) => sum + Bun.stringWidth(item.rendered) + (index > 0 ? SEGMENT_SEPARATOR.length : 0), 0);
+      if (width <= limit) {
+        previous.pop();
+        rows[rows.length - 1] = candidate;
+      }
+    }
+  }
   return rows;
 }
 
@@ -427,41 +442,56 @@ export class FullStatusWidget implements Widget {
       const icon = style ? themeIcon(this.theme, style.icon, style.fallback) : "";
       return { label, text, rendered: icon ? `${icon} ${label}:${text}` : `${label}:${text}` };
     };
-    const segments: Segment[] = [
-      segment("Model", modelText),
-      segment("Thinking", thinkingText),
-      segment("Tier", formatServiceTiers(this.serviceTiers())),
-      segment("State", stateText),
-      ...(modesText ? [segment("Mode", modesText)] : []),
-      ...(agentText ? [segment("Agent", agentText)] : []),
-      segment("WS", workspaceText),
-      segment("Git", gitText),
-      segment("Session", sessionText),
-      segment("Sid", sessionId),
-      segment("Turns", String(runtime.turnIndex)),
-      segment("Msgs", messagesText),
-      segment("Entries", String(this.context.sessionManager.getEntries().length)),
-      segment("Context", contextText),
-      segment("Cache", cacheHit),
-      segment("In", formatCount(usage.input)),
-      segment("Out", formatCount(usage.output)),
-      segment("Read", formatCount(usage.cacheRead)),
-      segment("Write", formatCount(usage.cacheWrite)),
-      segment("Rate", `${formatCount(Math.round(billedTokens / elapsedSeconds))} tok/s`),
-      segment("Avg", `${averageTurnTokens}/turn`),
-      segment("Tool", toolText),
-      segment("Jobs", jobsText),
-      segment("Tools", String(activeTools?.length ?? "n/a")),
-      segment("Compactions", String(counts.compactions)),
-      segment("Pending", pendingText),
-      segment("Review", reviewText),
-      segment("Cost", costText),
-      segment("Burn", burnRate),
-      segment("Turn", averageTurnTime),
-      segment("Time", formatDuration(elapsedMilliseconds)),
-      segment("Clock", new Date().toLocaleTimeString()),
+    // Six themed blocks, kept in the order the widget has always used:
+    // run configuration -> location -> session -> tokens -> work in flight ->
+    // cost and time. A block wraps inside itself when the terminal is narrow,
+    // so a wide terminal stays six lines and a narrow one grows rows without
+    // interleaving unrelated fields.
+    const groups: Segment[][] = [
+      [
+        segment("Model", modelText),
+        segment("Thinking", thinkingText),
+        segment("Tier", formatServiceTiers(this.serviceTiers())),
+        segment("State", stateText),
+        ...(modesText ? [segment("Mode", modesText)] : []),
+        ...(agentText ? [segment("Agent", agentText)] : []),
+      ],
+      [segment("WS", workspaceText), segment("Git", gitText)],
+      [
+        segment("Session", sessionText),
+        segment("Sid", sessionId),
+        segment("Turns", String(runtime.turnIndex)),
+        segment("Msgs", messagesText),
+        segment("Entries", String(this.context.sessionManager.getEntries().length)),
+        segment("Context", contextText),
+      ],
+      [
+        segment("Cache", cacheHit),
+        segment("In", formatCount(usage.input)),
+        segment("Out", formatCount(usage.output)),
+        segment("Read", formatCount(usage.cacheRead)),
+        segment("Write", formatCount(usage.cacheWrite)),
+        segment("Rate", `${formatCount(Math.round(billedTokens / elapsedSeconds))} tok/s`),
+        segment("Avg", `${averageTurnTokens}/turn`),
+      ],
+      [
+        segment("Tool", toolText),
+        segment("Jobs", jobsText),
+        segment("Tools", String(activeTools?.length ?? "n/a")),
+        segment("Compactions", String(counts.compactions)),
+        segment("Pending", pendingText),
+        segment("Review", reviewText),
+      ],
+      [
+        segment("Cost", costText),
+        segment("Burn", burnRate),
+        segment("Turn", averageTurnTime),
+        segment("Time", formatDuration(elapsedMilliseconds)),
+        segment("Clock", new Date().toLocaleTimeString()),
+      ],
     ];
-    return packSegments(segments, width)
+    return groups
+      .flatMap(group => packSegments(group, width))
       .map(line => line
         .map(item => {
           const style = this.segmentStyle(item.label);
