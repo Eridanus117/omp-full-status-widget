@@ -1,0 +1,34 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # Auto-update only compares catalog entries that declare a version, so a
+      # release whose catalog still says the old number silently stops updating.
+      - name: Marketplace catalog matches package.json
+        run: node scripts/sync-marketplace-version.mjs --check
+
+      - name: Extension entry exists
+        run: test -f full-status-widget.ts
+
+      - name: Test
+        run: bun test
+
+      - name: Build
+        run: bun run check
