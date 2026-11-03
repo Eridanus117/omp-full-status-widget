@@ -16,7 +16,9 @@ interface Usage {
 
 interface SessionEntry {
   type?: string;
+  kind?: string;
   role?: string;
+  usage?: Usage;
   message?: { usage?: Usage };
   usage?: Usage;
 }
@@ -160,15 +162,22 @@ interface SessionCounts {
   user: number;
   assistant: number;
   compactions: number;
+  toolCalls: number;
+  warmCost: number | undefined;
 }
 
 export function collectCounts(sessionManager: SessionManager): SessionCounts {
-  const counts: SessionCounts = { user: 0, assistant: 0, compactions: 0 };
+  const counts: SessionCounts = { user: 0, assistant: 0, compactions: 0, toolCalls: 0, warmCost: undefined };
   for (const entry of sessionManager.getEntries()) {
     if (entry.type === "compaction") counts.compactions += 1;
+    if (entry.type === "usage" && entry.kind === "cache_warm") {
+      const cost = usageCost(entry.usage?.cost);
+      if (cost !== undefined) counts.warmCost = (counts.warmCost ?? 0) + cost;
+    }
     const role = entry.message?.role;
     if (role === "user") counts.user += 1;
     else if (role === "assistant") counts.assistant += 1;
+    else if (role === "toolResult") counts.toolCalls += 1;
   }
   return counts;
 }
@@ -353,6 +362,9 @@ const SEGMENT_STYLES: Record<string, SegmentStyle> = {
   Write: { color: "statusLineSpend", icon: "cache", fallback: "◫" },
   Rate: { color: "statusLineOutput", icon: "throughput", fallback: "↯" },
   Avg: { color: "statusLineOutput", icon: "throughput", fallback: "≈" },
+  Warm: { color: "statusLineSpend", icon: "cache", fallback: "♨" },
+  Calls: { color: "dim", icon: "tool", fallback: "⌘" },
+  PerTurn: { color: "statusLineCost", icon: "cost", fallback: "$" },
   Tool: { color: "accent", icon: "tool", fallback: "⚙" },
   Jobs: { color: "accent", icon: "task", fallback: "⋮" },
   Tools: { color: "dim", icon: "tool", fallback: "⚒" },
@@ -415,6 +427,10 @@ export class FullStatusWidget implements Widget {
     const billedTokens = usage.input + usage.output;
     const averageTurnTokens = runtime.turnIndex > 0 ? formatCount(Math.round(billedTokens / runtime.turnIndex)) : "n/a";
     const averageTurnTime = runtime.turnIndex > 0 ? formatDuration(elapsedMilliseconds / runtime.turnIndex) : "n/a";
+    const warmText = counts.warmCost === undefined ? "n/a" : counts.warmCost.toFixed(3);
+    const costPerTurn = usage.cost != null && runtime.turnIndex > 0
+      ? (usage.cost / runtime.turnIndex).toFixed(3)
+      : "n/a";
     const burnRate = usage.cost != null && elapsedMilliseconds >= 60_000
       ? `${(usage.cost / (elapsedMilliseconds / 3_600_000)).toFixed(2)}/h`
       : "n/a";
@@ -473,17 +489,20 @@ export class FullStatusWidget implements Widget {
         segment("Write", formatCount(usage.cacheWrite)),
         segment("Rate", `${formatCount(Math.round(billedTokens / elapsedSeconds))} tok/s`),
         segment("Avg", `${averageTurnTokens}/turn`),
+        segment("Warm", warmText),
       ],
       [
         segment("Tool", toolText),
         segment("Jobs", jobsText),
         segment("Tools", String(activeTools?.length ?? "n/a")),
+        segment("Calls", String(counts.toolCalls)),
         segment("Compactions", String(counts.compactions)),
         segment("Pending", pendingText),
         segment("Review", reviewText),
       ],
       [
         segment("Cost", costText),
+        segment("PerTurn", costPerTurn),
         segment("Burn", burnRate),
         segment("Turn", averageTurnTime),
         segment("Time", formatDuration(elapsedMilliseconds)),

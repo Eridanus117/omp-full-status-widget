@@ -9,9 +9,9 @@
 1. 模型、思考级别、服务层级和 Agent 状态
 2. 工作区、Git 分支同步情况和变更数与未跟踪数
 3. 会话名称与短 ID、回合数、用户/助手消息数、条目数和上下文用量
-4. 缓存命中率、输入/输出/缓存令牌、平均速率和每回合平均令牌
-5. 当前工具、异步任务、活动工具数、压缩次数、待处理消息和 plan review 状态
-6. 成本、每小时成本、每回合耗时、会话耗时、时钟，以及 OMP 报告了才出现的 plan/goal/vibe/loop 模式与子 Agent 名称
+4. 缓存命中率、输入/输出/缓存令牌、平均速率、每回合平均令牌和缓存预热成本
+5. 当前工具、异步任务、活动工具数、工具调用数、压缩次数、待处理消息和 plan review 状态
+6. 成本、每回合成本、每小时成本、每回合耗时、会话耗时、时钟，以及 OMP 报告了才出现的 plan/goal/vibe/loop 模式与子 Agent 名称
 
 `Mode` 只在 OMP 的 `plan`/`goal`/`vibe`/`loop` 模式处于 active 或 paused 时出现（`loop:paused` 这样标注）；`Agent` 只在子 Agent 会话里出现，主会话不显示。两者都靠宿主提供，拿不到时整段省略，不占位。
 
@@ -25,9 +25,9 @@
 Model:openai/gpt-test | Thinking:high | Tier:openai=flex | State:tool · 00:00:04
 WS:C:/Workspace/project | Git:main ↑2 ↓1 +2 ~1 ?0
 Session:fix-auth | Turns:3 | Msgs:2/3 | Entries:18 | Context:42.0% · 84.0k/200.0k · 116.0k left
-Cache:94.2% | In:12.4k | Out:3.2k | Read:80k | Write:4.1k | Rate:1.8k tok/s | Avg:4.1k/turn
-Tool:bash · 00:00:04 | Jobs:2 running · 1 recent · 1 queued | Tools:14 | Compactions:0 | Pending:no
-Cost:$0.184 | $/h:$15.72 | ⌛00:14:06/turn | Time:00:42:18 | Clock:14:32:08 | Mode:plan | Agent:explore
+Cache:94.2% | In:12.4k | Out:3.2k | Read:80k | Write:4.1k | Rate:1.8k tok/s | Avg:4.1k/turn | Warm:0.003
+Tool:bash · 00:00:04 | Jobs:2 running · 1 recent · 1 queued | Tools:14 | Calls:37 | Compactions:0 | Pending:no
+Cost:0.184 | PerTurn:0.021 | Burn:15.72/h | ⌛00:14:06/turn | Time:00:42:18 | Clock:14:32:08 | Mode:plan | Agent:explore
 ~~~
 
 ### 第一行：模型和运行状态
