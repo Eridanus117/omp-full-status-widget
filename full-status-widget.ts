@@ -15,6 +15,8 @@ interface Usage {
 }
 
 interface SessionEntry {
+  type?: string;
+  role?: string;
   message?: { usage?: Usage };
   usage?: Usage;
 }
@@ -149,6 +151,23 @@ function addUsage(total: UsageTotal, usage: Usage | undefined): void {
   total.cacheWrite += cacheWrite ?? 0;
   if (usage.cost !== undefined && cost === undefined) total.cost = null;
   else if (cost !== undefined && total.cost !== null) total.cost = (total.cost ?? 0) + cost;
+}
+
+interface SessionCounts {
+  user: number;
+  assistant: number;
+  compactions: number;
+}
+
+export function collectCounts(sessionManager: SessionManager): SessionCounts {
+  const counts: SessionCounts = { user: 0, assistant: 0, compactions: 0 };
+  for (const entry of sessionManager.getEntries()) {
+    if (entry.type === "compaction") counts.compactions += 1;
+    const role = entry.message?.role;
+    if (role === "user") counts.user += 1;
+    else if (role === "assistant") counts.assistant += 1;
+  }
+  return counts;
 }
 
 function collectUsage(sessionManager: SessionManager): UsageTotal {
@@ -304,6 +323,9 @@ export class FullStatusWidget implements Widget {
       Jobs: { color: "accent", icon: "task", fallback: "⋮" },
       Tools: { color: "dim", icon: "tool", fallback: "⚒" },
       Pending: { color: "warning", icon: "task", fallback: "…" },
+      Msgs: { color: "dim", icon: "session", fallback: "✉" },
+      Avg: { color: "statusLineOutput", icon: "throughput", fallback: "≈" },
+      "Cost:": { color: "statusLineCost", icon: "cost", fallback: "$" },
       Cost: { color: "statusLineCost", icon: "cost", fallback: "$" },
       Time: { color: "dim", icon: "time", fallback: "◷" },
       Clock: { color: "dim", icon: "time", fallback: "◷" },
@@ -332,19 +354,27 @@ export class FullStatusWidget implements Widget {
       ? "n/a"
       : `${contextUsage.percent.toFixed(1)}% · ${contextTokens === undefined ? "?" : `${formatCount(contextTokens)}/`}${formatCount(contextWindow)} · ${contextLeft === undefined ? "?" : formatCount(contextLeft)} left`;
     const costText = usage.cost == null ? "n/a" : `$${usage.cost.toFixed(3)}`;
-    const valueWidth = Math.max(12, Math.floor(width * 0.35));
+    const valueWidth = Math.max(12, Math.floor(width * 0.45));
     const thinkingText = abbreviate(this.thinkingLevel() ?? "default", 12);
-    const modelText = abbreviate(model, Math.max(12, width - thinkingText.length - 30));
+    const modelText = abbreviate(model, Math.max(12, width - thinkingText.length - 24));
     const workspaceText = abbreviate(this.context.cwd, valueWidth);
     const gitText = formatGitState(this.gitState(), valueWidth);
     const sessionText = abbreviate(sessionName, valueWidth);
     const runtime = this.runtimeState;
+    const counts = collectCounts(this.context.sessionManager);
+    const messagesText = `${counts.user}/${counts.assistant}`;
+    const billedTokens = usage.input + usage.output;
+    const averageTurnTokens = runtime.turnIndex > 0 ? formatCount(Math.round(billedTokens / runtime.turnIndex)) : "n/a";
+    const averageTurnTime = runtime.turnIndex > 0 ? formatDuration(elapsedMilliseconds / runtime.turnIndex) : "n/a";
+    const burnRate = usage.cost != null && elapsedMilliseconds >= 60_000
+      ? `$${(usage.cost / (elapsedMilliseconds / 3_600_000)).toFixed(2)}`
+      : "n/a";
     const stateAge = formatDuration(now - runtime.statusSince);
     const stateText = runtime.status === "retrying" && runtime.retryAttempt !== undefined && runtime.retryMaxAttempts !== undefined
       ? `retry ${runtime.retryAttempt}/${runtime.retryMaxAttempts} · ${stateAge}`
       : `${runtime.status} · ${stateAge}`;
     const toolText = runtime.toolName
-      ? `${abbreviate(runtime.toolName, 16)} · ${formatDuration(now - (runtime.toolStartedAt ?? now))}`
+      ? `${abbreviate(runtime.toolName, Math.max(16, Math.floor(width * 0.15)))} · ${formatDuration(now - (runtime.toolStartedAt ?? now))}`
       : "n/a";
     const snapshot = this.context.getAsyncJobSnapshot?.();
     const jobsText = snapshot
@@ -358,10 +388,10 @@ export class FullStatusWidget implements Widget {
     const rawLines = [
       `Model:${modelText} | Thinking:${thinkingText} | Tier:${formatServiceTiers(this.serviceTiers())} | State:${stateText}`,
       `WS:${workspaceText} | Git:${gitText}`,
-      `Session:${sessionText} | Turns:${runtime.turnIndex} | Entries:${this.context.sessionManager.getEntries().length} | Context:${contextText}`,
-      `Cache:${cacheHit} | In:${formatCount(usage.input)} | Out:${formatCount(usage.output)} | Read:${formatCount(usage.cacheRead)} | Write:${formatCount(usage.cacheWrite)} | Rate:${formatCount(Math.round((usage.input + usage.output + usage.cacheRead) / elapsedSeconds))} tok/s`,
-      `Tool:${toolText} | Jobs:${jobsText} | Tools:${activeTools?.length ?? "n/a"} | Pending:${pendingText}`,
-      `Cost:${costText} | Time:${formatDuration(elapsedMilliseconds)} | Clock:${new Date().toLocaleTimeString()}${modesText ? ` | Mode:${modesText}` : ""}${agentText ? ` | Agent:${agentText}` : ""}`,
+      `Session:${sessionText} | Turns:${runtime.turnIndex} | Msgs:${messagesText} | Entries:${this.context.sessionManager.getEntries().length} | Context:${contextText}`,
+      `Cache:${cacheHit} | In:${formatCount(usage.input)} | Out:${formatCount(usage.output)} | Read:${formatCount(usage.cacheRead)} | Write:${formatCount(usage.cacheWrite)} | Rate:${formatCount(Math.round((usage.input + usage.output + usage.cacheRead) / elapsedSeconds))} tok/s | Avg:${averageTurnTokens}/turn`,
+      `Tool:${toolText} | Jobs:${jobsText} | Tools:${activeTools?.length ?? "n/a"} | Compactions:${counts.compactions} | Pending:${pendingText}`,
+      `Cost:${costText} | $/h:${burnRate} | ⌛${averageTurnTime}/turn | Time:${formatDuration(elapsedMilliseconds)} | Clock:${new Date().toLocaleTimeString()}${modesText ? ` | Mode:${modesText}` : ""}${agentText ? ` | Agent:${agentText}` : ""}`,
     ];
     return rawLines
       .map(line => line.split(" | ").map(segment => this.styleSegment(segment)).join(this.theme.fg("dim", " | ")))
