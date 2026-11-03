@@ -1,6 +1,6 @@
 {
   "name": "omp-full-status-widget",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A compact, OMP-themed six-row status widget for Oh My Pi.",
   "repository": "https://github.com/Eridanus117/omp-full-status-widget",
   "author": "Eridanus117",

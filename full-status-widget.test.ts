@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { FullStatusWidget, formatModes } from "./full-status-widget.ts";
+import { FullStatusWidget, formatModes, packSegments } from "./full-status-widget.ts";
 
 function widget(sessionName = "synthetic-session", cwd = "C:/synthetic-project", icon = "◆") {
   return new FullStatusWidget(
@@ -73,5 +73,34 @@ describe("mode and agent segments", () => {
     const text = base.render(160).map(Bun.stripANSI).join("\n");
     expect(text).toContain("Mode:plan");
     expect(text).toContain("Agent:explore");
+  });
+});
+
+describe("flow layout", () => {
+  const seg = (label: string, text: string) => ({ label, text, rendered: `${label}:${text}` });
+
+  test("packs segments up to the width and never splits one", () => {
+    const rows = packSegments([seg("A", "1"), seg("B", "2"), seg("C", "3")], 9);
+    expect(rows.map(row => row.map(s => s.label))).toEqual([["A", "B"], ["C"]]);
+    for (const row of rows) {
+      const width = row.reduce((sum, s, i) => sum + s.rendered.length + (i > 0 ? 3 : 0), 0);
+      expect(width).toBeLessThanOrEqual(9);
+    }
+  });
+
+  test("keeps every segment when the width is narrower than one segment", () => {
+    const rows = packSegments([seg("Path", "/very/long/path"), seg("B", "2")], 4);
+    expect(rows.flat().map(s => s.label)).toEqual(["Path", "B"]);
+  });
+
+  test("uses fewer rows as the terminal widens, without dropping fields", () => {
+    const widget80 = widget().render(80);
+    const widget200 = widget().render(200);
+    expect(widget80.length).toBeGreaterThan(widget200.length);
+    const labels = (lines: string[]) => Bun.stripANSI(lines.join(" "));
+    for (const label of ["Model:", "Git:", "Context:", "Cache:", "Tool:", "Cost:", "Clock:"]) {
+      expect(labels(widget200)).toContain(label);
+      expect(labels(widget80)).toContain(label);
+    }
   });
 });

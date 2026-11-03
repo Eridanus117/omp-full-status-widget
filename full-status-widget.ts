@@ -22,6 +22,7 @@ interface SessionEntry {
 }
 
 interface SessionManager {
+  getSessionId?(): string;
   getEntries(): readonly SessionEntry[];
   getSessionName(): string | undefined;
 }
@@ -56,6 +57,8 @@ interface ExtensionContext {
   sessionModes?: { getState(): unknown };
   /** OMP: the agent this session runs; `kind` is "main" or "sub". */
   agent?: { kind?: string; name?: string };
+  /** OMP: the plan review still awaiting an answer, if any. */
+  getPendingPlanReview?(): unknown;
   isIdle(): boolean;
   hasPendingMessages?(): boolean;
   ui: {
@@ -178,6 +181,37 @@ function collectUsage(sessionManager: SessionManager): UsageTotal {
   return total;
 }
 
+interface Segment {
+  label: string;
+  text: string;
+  /** Icon + `label:text`, the exact string whose display width is budgeted. */
+  rendered: string;
+}
+
+const SEGMENT_SEPARATOR = " | ";
+
+/** Greedy pack of `label:text` segments into rows no wider than `width`. */
+export function packSegments(segments: readonly Segment[], width: number): Segment[][] {
+  const limit = Math.max(1, Math.floor(width));
+  const rows: Segment[][] = [];
+  let row: Segment[] = [];
+  let rowWidth = 0;
+  for (const segment of segments) {
+    const segmentWidth = Bun.stringWidth(segment.rendered);
+    const added = row.length === 0 ? segmentWidth : rowWidth + SEGMENT_SEPARATOR.length + segmentWidth;
+    if (row.length > 0 && added > limit) {
+      rows.push(row);
+      row = [segment];
+      rowWidth = segmentWidth;
+    } else {
+      row.push(segment);
+      rowWidth = added;
+    }
+  }
+  if (row.length > 0) rows.push(row);
+  return rows;
+}
+
 function wrapLine(line: string, width: number): string[] {
   return Bun.wrapAnsi(line, Math.max(1, width), { hard: true }).split("\n");
 }
@@ -275,6 +309,48 @@ function resolveTheme(value: unknown): Theme {
   return { fg: (_color, text) => text, icon: {} };
 }
 
+interface SegmentStyle {
+  color: string;
+  icon: string;
+  fallback: string;
+}
+
+/** Label -> theme color and icon. Icons participate in width budgeting. */
+const SEGMENT_STYLES: Record<string, SegmentStyle> = {
+  Model: { color: "statusLineModel", icon: "model", fallback: "◆" },
+  Thinking: { color: "accent", icon: "thinking", fallback: "◈" },
+  Tier: { color: "dim", icon: "model", fallback: "◇" },
+  State: { color: "accent", icon: "status", fallback: "●" },
+  Mode: { color: "warning", icon: "status", fallback: "◆" },
+  Agent: { color: "accent", icon: "task", fallback: "⇉" },
+  WS: { color: "statusLinePath", icon: "folder", fallback: "▣" },
+  Git: { color: "statusLineGitDirty", icon: "branch", fallback: "⎇" },
+  Session: { color: "accent", icon: "session", fallback: "◌" },
+  Sid: { color: "dim", icon: "session", fallback: "#" },
+  Turns: { color: "dim", icon: "session", fallback: "↻" },
+  Msgs: { color: "dim", icon: "session", fallback: "✉" },
+  Entries: { color: "dim", icon: "session", fallback: "≡" },
+  Context: { color: "statusLineContext", icon: "context", fallback: "◐" },
+  Cache: { color: "statusLineSpend", icon: "cache", fallback: "◫" },
+  In: { color: "statusLineSpend", icon: "input", fallback: "←" },
+  Out: { color: "statusLineOutput", icon: "output", fallback: "→" },
+  Read: { color: "statusLineSpend", icon: "cache", fallback: "◫" },
+  Write: { color: "statusLineSpend", icon: "cache", fallback: "◫" },
+  Rate: { color: "statusLineOutput", icon: "throughput", fallback: "↯" },
+  Avg: { color: "statusLineOutput", icon: "throughput", fallback: "≈" },
+  Tool: { color: "accent", icon: "tool", fallback: "⚙" },
+  Jobs: { color: "accent", icon: "task", fallback: "⋮" },
+  Tools: { color: "dim", icon: "tool", fallback: "⚒" },
+  Compactions: { color: "dim", icon: "context", fallback: "⊟" },
+  Pending: { color: "warning", icon: "task", fallback: "…" },
+  Review: { color: "warning", icon: "status", fallback: "✓" },
+  Cost: { color: "statusLineCost", icon: "cost", fallback: "$" },
+  Burn: { color: "statusLineCost", icon: "cost", fallback: "$" },
+  Turn: { color: "dim", icon: "time", fallback: "◷" },
+  Time: { color: "dim", icon: "time", fallback: "◷" },
+  Clock: { color: "dim", icon: "time", fallback: "◷" },
+};
+
 export class FullStatusWidget implements Widget {
   constructor(
     private readonly context: ExtensionContext,
@@ -287,52 +363,8 @@ export class FullStatusWidget implements Widget {
     private readonly theme: Theme,
   ) {}
 
-  private styleSegment(segment: string): string {
-    const separatorIndex = segment.indexOf(":");
-    if (separatorIndex < 0) return segment;
-
-    const label = segment.slice(0, separatorIndex);
-    const gitState = this.gitState();
-    const contextPercent = this.context.getContextUsage()?.percent;
-    const contextColor = contextPercent != null && contextPercent >= 80
-      ? "error"
-      : contextPercent != null && contextPercent >= 50
-        ? "warning"
-        : "statusLineContext";
-    const gitDirty = gitState !== undefined && (gitState.staged > 0 || gitState.unstaged > 0 || gitState.untracked > 0);
-    const styles: Record<string, { color: string; icon: string; fallback: string }> = {
-      Model: { color: "statusLineModel", icon: "model", fallback: "◆" },
-      Thinking: { color: "accent", icon: "thinking", fallback: "◈" },
-      Tier: { color: "dim", icon: "model", fallback: "◇" },
-      State: { color: "accent", icon: "status", fallback: "●" },
-      WS: { color: "statusLinePath", icon: "folder", fallback: "▣" },
-      Git: { color: gitDirty ? "statusLineGitDirty" : "statusLineGitClean", icon: "branch", fallback: "⎇" },
-      Session: { color: "accent", icon: "session", fallback: "◌" },
-      Turns: { color: "dim", icon: "session", fallback: "↻" },
-      Mode: { color: "warning", icon: "status", fallback: "◆" },
-      Agent: { color: "accent", icon: "task", fallback: "⇉" },
-      Entries: { color: "dim", icon: "session", fallback: "≡" },
-      Context: { color: contextColor, icon: "context", fallback: "◐" },
-      Cache: { color: "statusLineSpend", icon: "cache", fallback: "◫" },
-      In: { color: "statusLineSpend", icon: "input", fallback: "←" },
-      Out: { color: "statusLineOutput", icon: "output", fallback: "→" },
-      Read: { color: "statusLineSpend", icon: "cache", fallback: "◫" },
-      Write: { color: "statusLineSpend", icon: "cache", fallback: "◫" },
-      Rate: { color: "statusLineOutput", icon: "throughput", fallback: "↯" },
-      Tool: { color: "accent", icon: "tool", fallback: "⚙" },
-      Jobs: { color: "accent", icon: "task", fallback: "⋮" },
-      Tools: { color: "dim", icon: "tool", fallback: "⚒" },
-      Pending: { color: "warning", icon: "task", fallback: "…" },
-      Msgs: { color: "dim", icon: "session", fallback: "✉" },
-      Avg: { color: "statusLineOutput", icon: "throughput", fallback: "≈" },
-      "Cost:": { color: "statusLineCost", icon: "cost", fallback: "$" },
-      Cost: { color: "statusLineCost", icon: "cost", fallback: "$" },
-      Time: { color: "dim", icon: "time", fallback: "◷" },
-      Clock: { color: "dim", icon: "time", fallback: "◷" },
-    };
-    const style = styles[label];
-    if (!style) return segment;
-    return this.theme.fg(style.color, `${themeIcon(this.theme, style.icon, style.fallback)} ${segment}`);
+  private segmentStyle(label: string): SegmentStyle | undefined {
+    return SEGMENT_STYLES[label];
   }
 
   render(width: number): string[] {
@@ -353,13 +385,15 @@ export class FullStatusWidget implements Widget {
     const contextText = contextUsage?.percent == null || contextWindow == null
       ? "n/a"
       : `${contextUsage.percent.toFixed(1)}% · ${contextTokens === undefined ? "?" : `${formatCount(contextTokens)}/`}${formatCount(contextWindow)} · ${contextLeft === undefined ? "?" : formatCount(contextLeft)} left`;
-    const costText = usage.cost == null ? "n/a" : `$${usage.cost.toFixed(3)}`;
+    const costText = usage.cost == null ? "n/a" : usage.cost.toFixed(3);
     const valueWidth = Math.max(12, Math.floor(width * 0.45));
     const thinkingText = abbreviate(this.thinkingLevel() ?? "default", 12);
     const modelText = abbreviate(model, Math.max(12, width - thinkingText.length - 24));
     const workspaceText = abbreviate(this.context.cwd, valueWidth);
     const gitText = formatGitState(this.gitState(), valueWidth);
     const sessionText = abbreviate(sessionName, valueWidth);
+    const sessionId = this.context.sessionManager.getSessionId?.()?.slice(0, 6) ?? "n/a";
+    const reviewText = this.context.getPendingPlanReview?.() ? "open" : "none";
     const runtime = this.runtimeState;
     const counts = collectCounts(this.context.sessionManager);
     const messagesText = `${counts.user}/${counts.assistant}`;
@@ -367,7 +401,7 @@ export class FullStatusWidget implements Widget {
     const averageTurnTokens = runtime.turnIndex > 0 ? formatCount(Math.round(billedTokens / runtime.turnIndex)) : "n/a";
     const averageTurnTime = runtime.turnIndex > 0 ? formatDuration(elapsedMilliseconds / runtime.turnIndex) : "n/a";
     const burnRate = usage.cost != null && elapsedMilliseconds >= 60_000
-      ? `$${(usage.cost / (elapsedMilliseconds / 3_600_000)).toFixed(2)}`
+      ? `${(usage.cost / (elapsedMilliseconds / 3_600_000)).toFixed(2)}/h`
       : "n/a";
     const stateAge = formatDuration(now - runtime.statusSince);
     const stateText = runtime.status === "retrying" && runtime.retryAttempt !== undefined && runtime.retryMaxAttempts !== undefined
@@ -385,16 +419,55 @@ export class FullStatusWidget implements Widget {
     const agent = this.context.agent;
     const agentText = agent?.kind === "sub" ? abbreviate(agent.name || "sub", 16) : "";
     const activeTools = this.activeTools?.();
-    const rawLines = [
-      `Model:${modelText} | Thinking:${thinkingText} | Tier:${formatServiceTiers(this.serviceTiers())} | State:${stateText}`,
-      `WS:${workspaceText} | Git:${gitText}`,
-      `Session:${sessionText} | Turns:${runtime.turnIndex} | Msgs:${messagesText} | Entries:${this.context.sessionManager.getEntries().length} | Context:${contextText}`,
-      `Cache:${cacheHit} | In:${formatCount(usage.input)} | Out:${formatCount(usage.output)} | Read:${formatCount(usage.cacheRead)} | Write:${formatCount(usage.cacheWrite)} | Rate:${formatCount(Math.round((usage.input + usage.output + usage.cacheRead) / elapsedSeconds))} tok/s | Avg:${averageTurnTokens}/turn`,
-      `Tool:${toolText} | Jobs:${jobsText} | Tools:${activeTools?.length ?? "n/a"} | Compactions:${counts.compactions} | Pending:${pendingText}`,
-      `Cost:${costText} | $/h:${burnRate} | ⌛${averageTurnTime}/turn | Time:${formatDuration(elapsedMilliseconds)} | Clock:${new Date().toLocaleTimeString()}${modesText ? ` | Mode:${modesText}` : ""}${agentText ? ` | Agent:${agentText}` : ""}`,
+    // Segments flow instead of living in fixed rows: the same reading order,
+    // packed to the terminal width, so a wide terminal uses fewer rows and a
+    // narrow one wraps rather than dropping fields.
+    const segment = (label: string, text: string): Segment => {
+      const style = this.segmentStyle(label);
+      const icon = style ? themeIcon(this.theme, style.icon, style.fallback) : "";
+      return { label, text, rendered: icon ? `${icon} ${label}:${text}` : `${label}:${text}` };
+    };
+    const segments: Segment[] = [
+      segment("Model", modelText),
+      segment("Thinking", thinkingText),
+      segment("Tier", formatServiceTiers(this.serviceTiers())),
+      segment("State", stateText),
+      ...(modesText ? [segment("Mode", modesText)] : []),
+      ...(agentText ? [segment("Agent", agentText)] : []),
+      segment("WS", workspaceText),
+      segment("Git", gitText),
+      segment("Session", sessionText),
+      segment("Sid", sessionId),
+      segment("Turns", String(runtime.turnIndex)),
+      segment("Msgs", messagesText),
+      segment("Entries", String(this.context.sessionManager.getEntries().length)),
+      segment("Context", contextText),
+      segment("Cache", cacheHit),
+      segment("In", formatCount(usage.input)),
+      segment("Out", formatCount(usage.output)),
+      segment("Read", formatCount(usage.cacheRead)),
+      segment("Write", formatCount(usage.cacheWrite)),
+      segment("Rate", `${formatCount(Math.round(billedTokens / elapsedSeconds))} tok/s`),
+      segment("Avg", `${averageTurnTokens}/turn`),
+      segment("Tool", toolText),
+      segment("Jobs", jobsText),
+      segment("Tools", String(activeTools?.length ?? "n/a")),
+      segment("Compactions", String(counts.compactions)),
+      segment("Pending", pendingText),
+      segment("Review", reviewText),
+      segment("Cost", costText),
+      segment("Burn", burnRate),
+      segment("Turn", averageTurnTime),
+      segment("Time", formatDuration(elapsedMilliseconds)),
+      segment("Clock", new Date().toLocaleTimeString()),
     ];
-    return rawLines
-      .map(line => line.split(" | ").map(segment => this.styleSegment(segment)).join(this.theme.fg("dim", " | ")))
+    return packSegments(segments, width)
+      .map(line => line
+        .map(item => {
+          const style = this.segmentStyle(item.label);
+          return style ? this.theme.fg(style.color, item.rendered) : item.rendered;
+        })
+        .join(this.theme.fg("dim", " | ")))
       .flatMap(line => wrapLine(line, width));
   }
 }
