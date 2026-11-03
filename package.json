@@ -1,6 +1,6 @@
 {
   "name": "omp-full-status-widget",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A compact, OMP-themed six-row status widget for Oh My Pi.",
   "repository": "https://github.com/Eridanus117/omp-full-status-widget",
   "author": "Eridanus117",
@@ -19,6 +19,7 @@
   "license": "MIT",
   "scripts": {
     "test": "bun test",
-    "check": "bun build full-status-widget.ts --target=bun --outdir .check"
+    "check": "bun build full-status-widget.ts --target=bun --outdir .check",
+    "release:sync-marketplace": "node scripts/sync-marketplace-version.mjs"
   }
 }
