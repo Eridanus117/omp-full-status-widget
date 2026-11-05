@@ -20,23 +20,10 @@ Issues 在本仓 GitHub Issues（`Eridanus117/omp-full-status-widget`）里，`g
 
 术语表在根 `GLOSSARY.md`（2026-10-07 建，issue #14；一词一条，新词先查它）；`docs/adr/` 按需生成。See `docs/agents/domain.md`.
 
-<!-- shared:start files=common,personal hash=1c482c5919b9 -->
-## 业务仓公共规则
+<!-- shared:start files=common,personal hash=42128f8b9a6b -->
+## 通用规则
 
 由 `scripts/sync-agents.sh` 生成，勿手改。源在 `workspace-v2/docs/agents/`。
-
-## 远端
-
-| 名称 | 角色 |
-| --- | --- |
-| `team` | 公司共享仓，生产基线 `master`，只读 |
-| `me` | 个人研发仓，研发基线 `main` |
-
-分支从 `main` 拉，名字带 Issue 编号（5 位以上），如 `fork-730804-switch-clean`。豁免 `main`、`master`、`backup/`、`personal-`、`release-`。生产代码经 A1 Change 投影，不直推 team。
-
-## 不变量
-
-`me/main` 必须包含 `team/master` 全部提交。`ahead` 正常（资产只存在于 me 侧）；`behind > 0` 说明投影会回滚 team 的改动，**投影前必须为 0**。
 
 ## 合入
 
