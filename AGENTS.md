@@ -20,8 +20,8 @@ Issues 在本仓 GitHub Issues（`Eridanus117/omp-full-status-widget`）里，`g
 
 术语表在根 `GLOSSARY.md`（2026-10-07 建，issue #14；一词一条，新词先查它）；`docs/adr/` 按需生成。See `docs/agents/domain.md`.
 
-<!-- shared:start files=common,personal hash=08c6adb3b341 -->
-# 业务仓公共规则
+<!-- shared:start files=common,personal hash=1c482c5919b9 -->
+## 业务仓公共规则
 
 由 `scripts/sync-agents.sh` 生成，勿手改。源在 `workspace-v2/docs/agents/`。
 
@@ -50,7 +50,7 @@ MR 先 approve 后 ff-only。本地检查通过再推，CI 只作背景。
 
 `workspace-v2/docs/agents/references/` 下按需读：`change-patterns.md`、`logging.md`、`metrics.md`、`worktree.md`。
 
-# 个人仓规则
+## 个人仓规则
 
 适用于 `omp-full-status-widget`、`pstack-omp`。
 
